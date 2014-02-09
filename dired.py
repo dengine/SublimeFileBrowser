@@ -261,7 +261,7 @@ class DiredNextLineCommand(TextCommand, DiredBaseCommand):
 
 
 class DiredSelect(TextCommand, DiredBaseCommand):
-    def run(self, edit, new_view=False):
+    def run(self, edit, new_view=False, other_group='', preview=''):
         path = self.path
         filenames = self.get_selected()
 
@@ -275,13 +275,37 @@ class DiredSelect(TextCommand, DiredBaseCommand):
                 self.view.window().run_command("dired_up")
                 return
 
+        if other_group or preview:
+            # we need group number of FB view, hence twice check for other_group
+            nag = self.view.window().active_group()
+        w = self.view.window()
         for filename in filenames:
             fqn = join(path, filename)
             if '<' not in fqn: # ignore 'item <error>'
                 if isdir(fqn):
                     show(self.view.window(), fqn, ignore_existing=new_view)
                 else:
-                    self.view.window().open_file(fqn)
+                    if preview:
+                        w.focus_group(self._other_group(w, nag))
+                        w.open_file(fqn, sublime.TRANSIENT)
+                        w.focus_group(nag)
+                        break # preview is possible for a single file only
+                    else:
+                        w.open_file(fqn)
+                        if other_group:
+                            w.run_command("move_to_group", {"group": self._other_group(w, nag)})
+
+    def _other_group(self, w, nag):
+        groups = w.num_groups()
+        if groups == 1:
+            w.set_layout({"cols": [0.0, 0.3, 1.0], "rows": [0.0, 1.0], "cells": [[0, 0, 1, 1], [1, 0, 2, 1]]})
+        if 1 <= groups <= 4 and nag < 2:
+            group = 1 if nag == 0 else 0
+        elif groups == 4 and nag >= 2:
+            group = 3 if nag == 2 else 2
+        else:
+            group = nag - 1
+        return group
 
 
 class DiredCreateCommand(TextCommand, DiredBaseCommand):
@@ -634,13 +658,13 @@ class DiredOpenInNewWindowCommand(TextCommand, DiredBaseCommand):
                    except:
                        subprocess.Popen(['/Applications/Sublime Text 2.app/Contents/SharedSupport/bin/subl'] + items, cwd=self.path)
             elif sublime.platform() == 'windows':
-               try:
-                   subprocess.Popen(['subl'] + items, cwd=self.path, shell=True)
-               except:
-                   try:
-                       subprocess.Popen(['sublime'] + items, cwd=self.path, shell=True)
-                   except:
-                       subprocess.Popen(['sublime_text.exe'] + items, cwd=self.path, shell=True)
+                try:
+                    subprocess.Popen(['subl'] + items, cwd=self.path, shell=True)
+                except:
+                    try:
+                        subprocess.Popen(['sublime'] + items, cwd=self.path, shell=True)
+                    except:
+                        subprocess.Popen(['sublime_text.exe'] + items, cwd=self.path, shell=True)
             else:
                try:
                    subprocess.Popen(['subl'] + items, cwd=self.path)
